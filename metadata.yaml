@@ -1,0 +1,5 @@
+homepage: "https://businessconsent.com"
+documentation: "https://businessconsent.com/docs#google-tag-manager"
+versions:
+  - sha: d99afaa4ab2e8e91becc1390cea14f7d2f0dff70
+    changeNotes: Initial release.
