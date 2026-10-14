@@ -70,22 +70,16 @@ ___TEMPLATE_PARAMETERS___
 ___SANDBOXED_JS_FOR_WEB_TEMPLATE___
 
 const setDefaultConsentState = require('setDefaultConsentState');
-const updateConsentState = require('updateConsentState');
 const injectScript = require('injectScript');
-const localStorage = require('localStorage');
-const JSON = require('JSON');
-const getTimestampMillis = require('getTimestampMillis');
 const encodeUriComponent = require('encodeUriComponent');
 const makeNumber = require('makeNumber');
 
-// Same key and lifetime as the BusinessConsent banner script.
-const STORAGE_KEY = 'bc_consent_v1';
-const MAX_AGE_MS = 365 * 24 * 60 * 60 * 1000;
 const SCRIPT_BASE = 'https://cdn.businessconsent.com/v1/';
 
-const state = (allowed) => (allowed === true ? 'granted' : 'denied');
-
-// 1. Everything denied until the visitor chooses.
+// 1. Everything denied until the banner script says otherwise. Returning
+//    visitors' stored choices are applied by the banner once it has checked
+//    the property's current settings (a choice made before the site asked
+//    everyone again must not count); tags wait up to wait_for_update for it.
 const wait = makeNumber(data.waitForUpdate);
 setDefaultConsentState({
   ad_storage: 'denied',
@@ -95,25 +89,7 @@ setDefaultConsentState({
   wait_for_update: wait >= 0 ? wait : 500,
 });
 
-// 2. Returning visitor: apply their stored choice now, before other tags fire.
-//    The banner script repeats this (with any custom signal mapping) once loaded.
-const raw = localStorage.getItem(STORAGE_KEY);
-const record = raw ? JSON.parse(raw) : undefined;
-if (
-  record &&
-  record.choices &&
-  typeof record.ts === 'number' &&
-  getTimestampMillis() - record.ts < MAX_AGE_MS
-) {
-  updateConsentState({
-    ad_storage: state(record.choices.marketing),
-    analytics_storage: state(record.choices.statistics),
-    ad_user_data: state(record.choices.marketing),
-    ad_personalization: state(record.choices.marketing),
-  });
-}
-
-// 3. Load the banner.
+// 2. Load the banner.
 injectScript(
   SCRIPT_BASE + encodeUriComponent(data.propertyId),
   data.gtmOnSuccess,
@@ -202,41 +178,6 @@ ___WEB_PERMISSIONS___
   {
     "instance": {
       "key": {
-        "publicId": "access_local_storage",
-        "versionId": "1"
-      },
-      "param": [
-        {
-          "key": "keys",
-          "value": {
-            "type": 2,
-            "listItem": [
-              {
-                "type": 3,
-                "mapKey": [
-                  { "type": 1, "string": "key" },
-                  { "type": 1, "string": "read" },
-                  { "type": 1, "string": "write" }
-                ],
-                "mapValue": [
-                  { "type": 1, "string": "bc_consent_v1" },
-                  { "type": 8, "boolean": true },
-                  { "type": 8, "boolean": false }
-                ]
-              }
-            ]
-          }
-        }
-      ]
-    },
-    "clientAnnotations": {
-      "isEditedByUser": true
-    },
-    "isRequired": true
-  },
-  {
-    "instance": {
-      "key": {
         "publicId": "inject_script",
         "versionId": "1"
       },
@@ -266,9 +207,8 @@ ___WEB_PERMISSIONS___
 ___TESTS___
 
 scenarios:
-- name: New visitor - denied defaults, no update, banner loaded
+- name: Denied defaults, no update, banner loaded
   code: |-
-    mockObject('localStorage', { getItem: () => null });
     let injected;
     mock('injectScript', (url, onSuccess) => { injected = url; onSuccess(); });
 
@@ -281,35 +221,23 @@ scenarios:
       ad_personalization: 'denied',
       wait_for_update: 500,
     });
-    assertApi('updateConsentState').wasNotCalled();
     assertThat(injected).isEqualTo('https://cdn.businessconsent.com/v1/11111111-1111-4111-8111-111111111111');
     assertApi('gtmOnSuccess').wasCalled();
-- name: Returning visitor - stored choice applied straight away
+- name: Custom wait time is passed to Consent Mode
   code: |-
-    mock('getTimestampMillis', 1760000000000);
-    mockObject('localStorage', { getItem: () => '{"ts":1759990000000,"choices":{"necessary":true,"preferences":false,"statistics":true,"marketing":false}}' });
     mock('injectScript', (url, onSuccess) => onSuccess());
 
-    runCode(mockData);
+    runCode({ propertyId: mockData.propertyId, waitForUpdate: 1500 });
 
-    assertApi('updateConsentState').wasCalledWith({
+    assertApi('setDefaultConsentState').wasCalledWith({
       ad_storage: 'denied',
-      analytics_storage: 'granted',
+      analytics_storage: 'denied',
       ad_user_data: 'denied',
       ad_personalization: 'denied',
+      wait_for_update: 1500,
     });
-- name: Expired choice is ignored
-  code: |-
-    mock('getTimestampMillis', 1760000000000);
-    mockObject('localStorage', { getItem: () => '{"ts":1700000000000,"choices":{"necessary":true,"preferences":true,"statistics":true,"marketing":true}}' });
-    mock('injectScript', (url, onSuccess) => onSuccess());
-
-    runCode(mockData);
-
-    assertApi('updateConsentState').wasNotCalled();
 - name: Script load failure is reported
   code: |-
-    mockObject('localStorage', { getItem: () => null });
     mock('injectScript', (url, onSuccess, onFailure) => onFailure());
 
     runCode(mockData);

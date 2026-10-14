@@ -8,9 +8,12 @@ Google Tag Manager, with Google Consent Mode v2 built in.
 1. Sets Google Consent Mode v2 defaults to **denied** — `ad_storage`,
    `analytics_storage`, `ad_user_data` and `ad_personalization` — before any
    other tag fires.
-2. For a returning visitor, applies their stored choice straight away, so tags
-   on the first page view already see the right consent.
-3. Loads the BusinessConsent banner for your property.
+2. Loads the BusinessConsent banner for your property.
+
+For a returning visitor, the banner applies their stored choice as soon as it
+has checked your property's current settings, so a choice made before you asked
+visitors again never counts. Google tags wait for that update (up to "Wait for
+update", 500 ms by default).
 
 After each decision the banner updates Consent Mode and pushes a
 `bc_consent_update` event to the dataLayer, with `bc_consent.preferences`,
