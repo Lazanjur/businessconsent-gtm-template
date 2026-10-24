@@ -3,6 +3,10 @@
 Install the [BusinessConsent](https://businessconsent.com) consent banner through
 Google Tag Manager, with Google Consent Mode v2 built in.
 
+This is the official template from BusinessConsent, published and maintained by
+the BusinessConsent team (Lazanjur is our GitHub account). Our documentation
+links here: https://businessconsent.com/docs#google-tag-manager
+
 ## What the tag does
 
 1. Sets Google Consent Mode v2 defaults to **denied** — `ad_storage`,
